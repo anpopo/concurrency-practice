@@ -1,6 +1,7 @@
 package anpopo.stockissue.service;
 
 import anpopo.stockissue.domain.Stock;
+import anpopo.stockissue.facade.NamedLockStockFacade;
 import anpopo.stockissue.facade.OptimisticLockStockFacade;
 import anpopo.stockissue.repository.StockRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -26,6 +27,9 @@ class StockServiceTest {
 
     @Autowired
     private OptimisticLockStockFacade optimisticLockStockFacade;
+
+    @Autowired
+    private NamedLockStockFacade namedLockStockFacade;
 
     @Autowired
     private StockRepository stockRepository;
@@ -108,6 +112,29 @@ class StockServiceTest {
                     optimisticLockStockFacade.decrease(1L, 1L);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        latch.await();
+
+        Stock stock = stockRepository.findById(1L).orElseThrow();
+
+        assertEquals(0, stock.getQuantity());
+    }
+
+    @Test
+    public void requestHundredsConcurrentlyWithNamedLock() throws InterruptedException {
+        int threadCount = 100;
+        ExecutorService executorService = Executors.newFixedThreadPool(32);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(() -> {
+                try {
+                    namedLockStockFacade.decrease(1L, 1L);
                 } finally {
                     latch.countDown();
                 }
